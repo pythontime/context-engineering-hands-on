@@ -1,0 +1,1032 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Chat with Artifacts</title>
+<style>
+/* ─── DESIGN SYSTEM ──────────────────────────────────────────── */
+:root {
+  --bg: #f8f9fa;
+  --surface: #ffffff;
+  --border: #e0e0e0;
+  --text: #1a1a1a;
+  --text-muted: #666666;
+  --accent: #5b5fc7;
+  --accent-light: #eef0ff;
+  --accent-dark: #4a4eb5;
+  --user-bg: #e8ebff;
+  --assistant-bg: #f0f0f0;
+  --success: #22a558;
+  --error: #dc3545;
+  --radius: 10px;
+  --shadow: 0 1px 3px rgba(0,0,0,0.08);
+  --font: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+  --mono: "SF Mono", "Fira Code", "Consolas", monospace;
+}
+
+* { margin: 0; padding: 0; box-sizing: border-box; }
+
+body {
+  font-family: var(--font);
+  background: var(--bg);
+  color: var(--text);
+  height: 100vh;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+/* ─── HEADER ─────────────────────────────────────────────────── */
+.header {
+  background: var(--surface);
+  border-bottom: 1px solid var(--border);
+  padding: 12px 24px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-shrink: 0;
+}
+.header h1 {
+  font-size: 16px;
+  font-weight: 600;
+  color: var(--accent);
+}
+.header-actions { display: flex; gap: 8px; }
+.btn-reset {
+  font-family: var(--font);
+  font-size: 13px;
+  padding: 6px 14px;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  background: var(--surface);
+  color: var(--text-muted);
+  cursor: pointer;
+  transition: all 0.15s;
+}
+.btn-reset:hover { border-color: var(--accent); color: var(--accent); }
+
+/* ─── MAIN LAYOUT ────────────────────────────────────────────── */
+.main {
+  display: flex;
+  flex: 1;
+  overflow: hidden;
+}
+
+/* ─── CHAT PANEL ─────────────────────────────────────────────── */
+.chat-panel {
+  width: 45%;
+  display: flex;
+  flex-direction: column;
+  border-right: 1px solid var(--border);
+  background: var(--surface);
+}
+.chat-messages {
+  flex: 1;
+  overflow-y: auto;
+  padding: 20px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+.message {
+  max-width: 85%;
+  padding: 10px 14px;
+  border-radius: var(--radius);
+  font-size: 14px;
+  line-height: 1.5;
+  white-space: pre-wrap;
+}
+.message.user {
+  align-self: flex-end;
+  background: var(--user-bg);
+  color: var(--text);
+}
+.message.assistant {
+  align-self: flex-start;
+  background: var(--assistant-bg);
+}
+.message.system {
+  align-self: center;
+  background: transparent;
+  color: var(--text-muted);
+  font-size: 12px;
+  font-style: italic;
+}
+.loading-dots {
+  align-self: flex-start;
+  padding: 10px 14px;
+  background: var(--assistant-bg);
+  border-radius: var(--radius);
+  font-size: 20px;
+  letter-spacing: 2px;
+  animation: pulse 1.2s ease-in-out infinite;
+}
+@keyframes pulse { 0%, 100% { opacity: 0.3; } 50% { opacity: 1; } }
+
+/* ─── CHAT INPUT ─────────────────────────────────────────────── */
+.chat-input-area {
+  padding: 16px 20px;
+  border-top: 1px solid var(--border);
+  display: flex;
+  gap: 8px;
+}
+.chat-input-area input {
+  flex: 1;
+  padding: 10px 14px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  font-family: var(--font);
+  font-size: 14px;
+  outline: none;
+  transition: border-color 0.15s;
+}
+.chat-input-area input:focus { border-color: var(--accent); }
+.chat-input-area button {
+  padding: 10px 20px;
+  background: var(--accent);
+  color: white;
+  border: none;
+  border-radius: 8px;
+  font-family: var(--font);
+  font-size: 14px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: background 0.15s;
+}
+.chat-input-area button:hover { background: var(--accent-dark); }
+.chat-input-area button:disabled { opacity: 0.5; cursor: not-allowed; }
+
+/* ─── ARTIFACT PANEL ─────────────────────────────────────────── */
+.artifact-panel {
+  width: 55%;
+  display: flex;
+  flex-direction: column;
+  background: var(--bg);
+}
+.artifact-header {
+  padding: 12px 24px;
+  border-bottom: 1px solid var(--border);
+  background: var(--surface);
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+.artifact-content {
+  flex: 1;
+  overflow-y: auto;
+  padding: 24px;
+  display: flex;
+  align-items: flex-start;
+  justify-content: center;
+}
+.artifact-placeholder {
+  text-align: center;
+  color: var(--text-muted);
+  padding-top: 120px;
+}
+.artifact-placeholder .icon { font-size: 48px; margin-bottom: 16px; opacity: 0.3; }
+.artifact-placeholder p { font-size: 14px; }
+
+/* ─── STATS BAR ──────────────────────────────────────────────── */
+.stats-bar {
+  padding: 8px 24px;
+  border-top: 1px solid var(--border);
+  background: var(--surface);
+  display: flex;
+  gap: 20px;
+  font-size: 11px;
+  font-family: var(--mono);
+  color: var(--text-muted);
+  flex-shrink: 0;
+}
+.stat-item { display: flex; gap: 4px; }
+.stat-label { opacity: 0.7; }
+.stat-value { font-weight: 600; color: var(--text); }
+
+/* ─── ARTIFACT RENDERERS ─────────────────────────────────────── */
+.artifact-container {
+  width: 100%;
+  max-width: 560px;
+}
+.artifact-title {
+  font-size: 18px;
+  font-weight: 600;
+  margin-bottom: 16px;
+  color: var(--text);
+}
+
+/* Selectable Options */
+.options-grid {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+.option-card {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 14px 16px;
+  background: var(--surface);
+  border: 1.5px solid var(--border);
+  border-radius: var(--radius);
+  cursor: pointer;
+  transition: all 0.15s;
+}
+.option-card:hover {
+  border-color: var(--accent);
+  background: var(--accent-light);
+  transform: translateX(4px);
+}
+.option-icon { font-size: 24px; flex-shrink: 0; }
+.option-label { font-weight: 600; font-size: 14px; }
+.option-desc { font-size: 13px; color: var(--text-muted); margin-top: 2px; }
+
+/* Flashcard Deck */
+.flashcard-container { perspective: 1000px; }
+.flashcard-nav {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 16px;
+  margin-bottom: 16px;
+}
+.flashcard-nav button {
+  padding: 6px 16px;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  background: var(--surface);
+  font-family: var(--font);
+  cursor: pointer;
+}
+.flashcard-nav button:hover { border-color: var(--accent); }
+.flashcard-counter { font-size: 13px; color: var(--text-muted); font-weight: 500; }
+.flashcard {
+  width: 100%;
+  height: 220px;
+  position: relative;
+  cursor: pointer;
+  transform-style: preserve-3d;
+  transition: transform 0.5s;
+}
+.flashcard.flipped { transform: rotateY(180deg); }
+.flashcard-face {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 24px;
+  border-radius: var(--radius);
+  backface-visibility: hidden;
+  font-size: 16px;
+  line-height: 1.5;
+  text-align: center;
+}
+.flashcard-front {
+  background: var(--surface);
+  border: 2px solid var(--accent);
+  font-weight: 600;
+}
+.flashcard-back {
+  background: var(--accent-light);
+  border: 2px solid var(--accent);
+  transform: rotateY(180deg);
+}
+.flashcard-hint {
+  text-align: center;
+  font-size: 12px;
+  color: var(--text-muted);
+  margin-top: 10px;
+}
+
+/* Checklist */
+.checklist-items { display: flex; flex-direction: column; gap: 8px; }
+.checklist-item {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  padding: 10px 14px;
+  background: var(--surface);
+  border-radius: 8px;
+  border: 1px solid var(--border);
+  cursor: pointer;
+  transition: all 0.15s;
+}
+.checklist-item:hover { border-color: var(--accent); }
+.checklist-item.checked { opacity: 0.6; }
+.checklist-item.checked .check-text { text-decoration: line-through; }
+.check-box {
+  width: 20px;
+  height: 20px;
+  border: 2px solid var(--border);
+  border-radius: 4px;
+  flex-shrink: 0;
+  margin-top: 1px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: all 0.15s;
+  font-size: 12px;
+}
+.checklist-item.checked .check-box {
+  background: var(--success);
+  border-color: var(--success);
+  color: white;
+}
+.check-text { font-size: 14px; }
+.check-detail { font-size: 12px; color: var(--text-muted); margin-top: 2px; }
+.progress-bar-container {
+  margin-bottom: 16px;
+  background: var(--border);
+  border-radius: 10px;
+  height: 8px;
+  overflow: hidden;
+}
+.progress-bar-fill {
+  height: 100%;
+  background: var(--success);
+  border-radius: 10px;
+  transition: width 0.3s ease;
+  width: 0%;
+}
+.progress-text {
+  font-size: 12px;
+  color: var(--text-muted);
+  margin-bottom: 8px;
+  text-align: right;
+}
+
+/* Flowchart */
+.flowchart-svg { width: 100%; }
+
+/* Semantic Zoom */
+.zoom-tabs {
+  display: flex;
+  gap: 4px;
+  margin-bottom: 16px;
+  background: var(--bg);
+  padding: 4px;
+  border-radius: 8px;
+}
+.zoom-tab {
+  flex: 1;
+  padding: 8px 12px;
+  border: none;
+  border-radius: 6px;
+  background: transparent;
+  font-family: var(--font);
+  font-size: 13px;
+  font-weight: 500;
+  cursor: pointer;
+  color: var(--text-muted);
+  transition: all 0.15s;
+}
+.zoom-tab.active {
+  background: var(--surface);
+  color: var(--accent);
+  box-shadow: var(--shadow);
+}
+.zoom-content {
+  background: var(--surface);
+  border-radius: var(--radius);
+  padding: 20px;
+  border: 1px solid var(--border);
+  font-size: 14px;
+  line-height: 1.7;
+  white-space: pre-wrap;
+  transition: opacity 0.2s;
+}
+
+/* Inline Quiz */
+.quiz-question-text {
+  font-size: 16px;
+  font-weight: 600;
+  margin-bottom: 16px;
+  line-height: 1.4;
+}
+.quiz-counter {
+  font-size: 12px;
+  color: var(--text-muted);
+  margin-bottom: 8px;
+}
+.quiz-options { display: flex; flex-direction: column; gap: 8px; margin-bottom: 16px; }
+.quiz-option {
+  padding: 12px 16px;
+  border: 1.5px solid var(--border);
+  border-radius: 8px;
+  cursor: pointer;
+  font-size: 14px;
+  background: var(--surface);
+  transition: all 0.15s;
+}
+.quiz-option:hover:not(.disabled) { border-color: var(--accent); background: var(--accent-light); }
+.quiz-option.selected { border-color: var(--accent); background: var(--accent-light); }
+.quiz-option.correct { border-color: var(--success); background: #e8f5e9; }
+.quiz-option.incorrect { border-color: var(--error); background: #ffebee; }
+.quiz-option.disabled { cursor: default; }
+.quiz-explanation {
+  padding: 12px 16px;
+  background: #f0f7ff;
+  border-radius: 8px;
+  font-size: 13px;
+  line-height: 1.5;
+  margin-bottom: 16px;
+  border-left: 3px solid var(--accent);
+}
+.quiz-actions { display: flex; gap: 8px; }
+.quiz-btn {
+  padding: 8px 20px;
+  border: none;
+  border-radius: 6px;
+  font-family: var(--font);
+  font-size: 13px;
+  font-weight: 500;
+  cursor: pointer;
+}
+.quiz-btn-check { background: var(--accent); color: white; }
+.quiz-btn-check:hover { background: var(--accent-dark); }
+.quiz-btn-next { background: var(--bg); border: 1px solid var(--border) !important; }
+.quiz-btn-next:hover { border-color: var(--accent) !important; }
+.quiz-score {
+  text-align: center;
+  padding: 24px;
+  background: var(--surface);
+  border-radius: var(--radius);
+  border: 1px solid var(--border);
+}
+.quiz-score .score-number { font-size: 48px; font-weight: 700; color: var(--accent); }
+.quiz-score .score-label { font-size: 14px; color: var(--text-muted); margin-top: 8px; }
+
+/* Concept Explorer */
+.explorer-svg { width: 100%; cursor: crosshair; }
+.explorer-dot { cursor: pointer; transition: r 0.15s; }
+.explorer-dot:hover { r: 10; }
+.explorer-label {
+  font-family: var(--font);
+  font-size: 11px;
+  fill: var(--text);
+  pointer-events: none;
+}
+.explorer-tooltip {
+  position: absolute;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 8px 12px;
+  font-size: 12px;
+  box-shadow: 0 4px 12px rgba(0,0,0,0.1);
+  pointer-events: none;
+  max-width: 200px;
+  z-index: 10;
+  display: none;
+}
+</style>
+</head>
+<body>
+
+<div class="header">
+  <h1>Chat with Artifacts</h1>
+  <div class="header-actions">
+    <button class="btn-reset" onclick="resetChat()">Reset</button>
+  </div>
+</div>
+
+<div class="main">
+  <!-- Chat Panel -->
+  <div class="chat-panel">
+    <div class="chat-messages" id="chatMessages">
+      <div class="message system">Start a conversation to see interactive artifacts appear here.</div>
+    </div>
+    <div class="chat-input-area">
+      <input type="text" id="chatInput" placeholder="Ask me anything..."
+             onkeydown="if(event.key==='Enter'&&!event.shiftKey){event.preventDefault();sendFromInput()}" />
+      <button id="sendBtn" onclick="sendFromInput()">Send</button>
+    </div>
+  </div>
+
+  <!-- Artifact Panel -->
+  <div class="artifact-panel">
+    <div class="artifact-header">Artifact</div>
+    <div class="artifact-content" id="artifactContent">
+      <div class="artifact-placeholder">
+        <div class="icon">&#9672;</div>
+        <p>Artifacts will appear here as you chat.</p>
+        <p>Try: "I want to learn about recursion"</p>
+      </div>
+    </div>
+    <div class="stats-bar" id="statsBar">
+      <div class="stat-item"><span class="stat-label">turns:</span><span class="stat-value" id="statTurns">0</span></div>
+      <div class="stat-item"><span class="stat-label">messages:</span><span class="stat-value" id="statMessages">0</span></div>
+      <div class="stat-item"><span class="stat-label">artifacts:</span><span class="stat-value" id="statArtifacts">0</span></div>
+      <div class="stat-item"><span class="stat-label">in:</span><span class="stat-value" id="statInput">0</span></div>
+      <div class="stat-item"><span class="stat-label">out:</span><span class="stat-value" id="statOutput">0</span></div>
+      <div class="stat-item"><span class="stat-label">total in:</span><span class="stat-value" id="statTotalInput">0</span></div>
+      <div class="stat-item"><span class="stat-label">total out:</span><span class="stat-value" id="statTotalOutput">0</span></div>
+    </div>
+  </div>
+</div>
+
+<div class="explorer-tooltip" id="explorerTooltip"></div>
+
+<script>
+// ─── SESSION STATE ───────────────────────────────────────────────
+const SESSION_ID = crypto.randomUUID();
+let isLoading = false;
+
+// ─── RENDERER DISPATCH ───────────────────────────────────────────
+// This is the frontend equivalent of the backend's artifact registry.
+// Each renderer knows how to turn structured JSON into interactive DOM.
+const RENDERERS = {
+  selectable_options: renderSelectableOptions,
+  flashcard_deck:     renderFlashcardDeck,
+  checklist:          renderChecklist,
+  flowchart:          renderFlowchart,
+  semantic_zoom:      renderSemanticZoom,
+  inline_quiz:        renderInlineQuiz,
+  concept_explorer:   renderConceptExplorer,
+};
+
+// ─── CORE CHAT FUNCTION ─────────────────────────────────────────
+// This is the context accumulation loop. Every call adds to the
+// conversation history on the backend. Artifact interactions
+// (clicks, selections) become chat messages — the model sees them.
+async function sendMessage(text) {
+  if (isLoading || !text.trim()) return;
+  isLoading = true;
+
+  const input = document.getElementById('chatInput');
+  const sendBtn = document.getElementById('sendBtn');
+  input.disabled = true;
+  sendBtn.disabled = true;
+
+  // Add user message to chat
+  addChatMessage(text, 'user');
+
+  // Show loading indicator
+  const loadingEl = document.createElement('div');
+  loadingEl.className = 'loading-dots';
+  loadingEl.textContent = '...';
+  document.getElementById('chatMessages').appendChild(loadingEl);
+  scrollChat();
+
+  try {
+    const resp = await fetch('/api/chat', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ message: text, session_id: SESSION_ID }),
+    });
+    const data = await resp.json();
+
+    // Remove loading indicator
+    loadingEl.remove();
+
+    // Add assistant message
+    if (data.text) {
+      addChatMessage(data.text, 'assistant');
+    }
+
+    // Render artifact if present
+    if (data.artifact) {
+      renderArtifact(data.artifact);
+    }
+
+    // Update stats
+    if (data.stats) {
+      updateStats(data.stats);
+    }
+  } catch (err) {
+    loadingEl.remove();
+    addChatMessage('Error: could not reach the server.', 'system');
+  }
+
+  input.disabled = false;
+  sendBtn.disabled = false;
+  input.focus();
+  isLoading = false;
+}
+
+function sendFromInput() {
+  const input = document.getElementById('chatInput');
+  const text = input.value.trim();
+  if (text) {
+    input.value = '';
+    sendMessage(text);
+  }
+}
+
+function addChatMessage(text, role) {
+  const container = document.getElementById('chatMessages');
+  const msg = document.createElement('div');
+  msg.className = `message ${role}`;
+  msg.textContent = text;
+  container.appendChild(msg);
+  scrollChat();
+}
+
+function scrollChat() {
+  const container = document.getElementById('chatMessages');
+  container.scrollTop = container.scrollHeight;
+}
+
+function updateStats(stats) {
+  document.getElementById('statTurns').textContent = stats.turn_count;
+  document.getElementById('statMessages').textContent = stats.message_count;
+  document.getElementById('statArtifacts').textContent = stats.artifact_count;
+  document.getElementById('statInput').textContent = stats.input_tokens.toLocaleString();
+  document.getElementById('statOutput').textContent = stats.output_tokens.toLocaleString();
+  document.getElementById('statTotalInput').textContent = stats.total_input_tokens.toLocaleString();
+  document.getElementById('statTotalOutput').textContent = stats.total_output_tokens.toLocaleString();
+}
+
+async function resetChat() {
+  await fetch('/api/reset', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ session_id: SESSION_ID }),
+  });
+  document.getElementById('chatMessages').innerHTML =
+    '<div class="message system">Conversation reset. Start fresh!</div>';
+  document.getElementById('artifactContent').innerHTML =
+    '<div class="artifact-placeholder"><div class="icon">&#9672;</div><p>Artifacts will appear here as you chat.</p></div>';
+  ['statTurns','statMessages','statArtifacts','statInput','statOutput','statTotalInput','statTotalOutput']
+    .forEach(id => document.getElementById(id).textContent = '0');
+}
+
+// ─── ARTIFACT DISPATCHER ─────────────────────────────────────────
+function renderArtifact(artifact) {
+  const container = document.getElementById('artifactContent');
+  const renderer = RENDERERS[artifact.artifact_type];
+
+  if (renderer) {
+    container.innerHTML = '';
+    const wrapper = document.createElement('div');
+    wrapper.className = 'artifact-container';
+    renderer(wrapper, artifact);
+    container.appendChild(wrapper);
+  } else {
+    container.innerHTML = `<pre style="font-size:12px">${JSON.stringify(artifact, null, 2)}</pre>`;
+  }
+}
+
+// ─── RENDERER 1: SELECTABLE OPTIONS ──────────────────────────────
+// Clickable cards that send the selection back to chat as a message.
+// This is the context accumulation pattern: user clicks → chat message
+// → model sees it in conversation history → responds accordingly.
+function renderSelectableOptions(el, data) {
+  el.innerHTML = `<div class="artifact-title">${esc(data.title)}</div>`;
+  const grid = document.createElement('div');
+  grid.className = 'options-grid';
+
+  data.options.forEach(opt => {
+    const card = document.createElement('div');
+    card.className = 'option-card';
+    card.innerHTML = `
+      <div class="option-icon">${esc(opt.icon)}</div>
+      <div>
+        <div class="option-label">${esc(opt.label)}</div>
+        <div class="option-desc">${esc(opt.description)}</div>
+      </div>`;
+    card.onclick = () => sendMessage(`I'd like to explore: ${opt.label}`);
+    grid.appendChild(card);
+  });
+
+  el.appendChild(grid);
+}
+
+// ─── RENDERER 2: FLASHCARD DECK ─────────────────────────────────
+// CSS 3D flip cards with prev/next navigation.
+function renderFlashcardDeck(el, data) {
+  let currentIndex = 0;
+  let flipped = false;
+
+  function render() {
+    const card = data.cards[currentIndex];
+    el.innerHTML = `
+      <div class="artifact-title">${esc(data.title)}</div>
+      <div class="flashcard-nav">
+        <button onclick="this.getRootNode().querySelector('.flashcard-deck-prev').click()">&#8592; Prev</button>
+        <span class="flashcard-counter">${currentIndex + 1} / ${data.cards.length}</span>
+        <button onclick="this.getRootNode().querySelector('.flashcard-deck-next').click()">Next &#8594;</button>
+      </div>
+      <div class="flashcard-container">
+        <div class="flashcard ${flipped ? 'flipped' : ''}" id="flashcard">
+          <div class="flashcard-face flashcard-front">${esc(card.front)}</div>
+          <div class="flashcard-face flashcard-back">${esc(card.back)}</div>
+        </div>
+      </div>
+      <div class="flashcard-hint">Click card to flip</div>
+      <button class="flashcard-deck-prev" style="display:none"></button>
+      <button class="flashcard-deck-next" style="display:none"></button>`;
+
+    el.querySelector('#flashcard').onclick = () => { flipped = !flipped; render(); };
+    el.querySelector('.flashcard-deck-prev').onclick = () => { if (currentIndex > 0) { currentIndex--; flipped = false; render(); } };
+    el.querySelector('.flashcard-deck-next').onclick = () => { if (currentIndex < data.cards.length - 1) { currentIndex++; flipped = false; render(); } };
+
+    // Re-bind visible nav buttons
+    const navBtns = el.querySelectorAll('.flashcard-nav button');
+    navBtns[0].onclick = () => { if (currentIndex > 0) { currentIndex--; flipped = false; render(); } };
+    navBtns[1].onclick = () => { if (currentIndex < data.cards.length - 1) { currentIndex++; flipped = false; render(); } };
+  }
+
+  render();
+}
+
+// ─── RENDERER 3: CHECKLIST ──────────────────────────────────────
+// Checkboxes with animated progress bar. State is local only.
+function renderChecklist(el, data) {
+  const checked = new Set();
+
+  function render() {
+    const pct = data.items.length > 0 ? Math.round((checked.size / data.items.length) * 100) : 0;
+    el.innerHTML = `
+      <div class="artifact-title">${esc(data.title)}</div>
+      <div class="progress-text">${checked.size} / ${data.items.length} complete</div>
+      <div class="progress-bar-container">
+        <div class="progress-bar-fill" style="width: ${pct}%"></div>
+      </div>
+      <div class="checklist-items" id="checklistItems"></div>`;
+
+    const container = el.querySelector('#checklistItems');
+    data.items.forEach((item, i) => {
+      const isChecked = checked.has(i);
+      const div = document.createElement('div');
+      div.className = `checklist-item ${isChecked ? 'checked' : ''}`;
+      div.innerHTML = `
+        <div class="check-box">${isChecked ? '&#10003;' : ''}</div>
+        <div>
+          <div class="check-text">${esc(item.text)}</div>
+          ${item.detail ? `<div class="check-detail">${esc(item.detail)}</div>` : ''}
+        </div>`;
+      div.onclick = () => {
+        if (checked.has(i)) checked.delete(i); else checked.add(i);
+        render();
+      };
+      container.appendChild(div);
+    });
+  }
+
+  render();
+}
+
+// ─── RENDERER 4: FLOWCHART ──────────────────────────────────────
+// Inline SVG with simple top-down layout.
+function renderFlowchart(el, data) {
+  el.innerHTML = `<div class="artifact-title">${esc(data.title)}</div>`;
+
+  // Layout: assign levels via BFS from roots
+  const nodes = data.nodes;
+  const edges = data.edges;
+  const nodeMap = {};
+  nodes.forEach(n => nodeMap[n.id] = { ...n, children: [], parents: [], level: 0 });
+  edges.forEach(e => {
+    if (nodeMap[e.from] && nodeMap[e.to]) {
+      nodeMap[e.from].children.push(e.to);
+      nodeMap[e.to].parents.push(e.from);
+    }
+  });
+
+  // Find roots (no parents)
+  const roots = nodes.filter(n => nodeMap[n.id].parents.length === 0).map(n => n.id);
+  if (roots.length === 0 && nodes.length > 0) roots.push(nodes[0].id);
+
+  // BFS to assign levels
+  const visited = new Set();
+  const queue = roots.map(id => ({ id, level: 0 }));
+  const levels = {};
+  while (queue.length > 0) {
+    const { id, level } = queue.shift();
+    if (visited.has(id)) continue;
+    visited.add(id);
+    nodeMap[id].level = level;
+    if (!levels[level]) levels[level] = [];
+    levels[level].push(id);
+    nodeMap[id].children.forEach(cid => queue.push({ id: cid, level: level + 1 }));
+  }
+  // Add any unvisited nodes
+  nodes.forEach(n => {
+    if (!visited.has(n.id)) {
+      const maxLevel = Math.max(0, ...Object.keys(levels).map(Number)) + 1;
+      if (!levels[maxLevel]) levels[maxLevel] = [];
+      levels[maxLevel].push(n.id);
+      nodeMap[n.id].level = maxLevel;
+    }
+  });
+
+  const levelCount = Math.max(1, Object.keys(levels).length);
+  const maxPerLevel = Math.max(1, ...Object.values(levels).map(l => l.length));
+  const nodeW = 140, nodeH = 50, gapX = 40, gapY = 70;
+  const svgW = maxPerLevel * (nodeW + gapX);
+  const svgH = levelCount * (nodeH + gapY) + 20;
+
+  // Assign positions
+  const positions = {};
+  Object.entries(levels).forEach(([lvl, ids]) => {
+    const y = Number(lvl) * (nodeH + gapY) + 30;
+    const totalW = ids.length * nodeW + (ids.length - 1) * gapX;
+    const startX = (svgW - totalW) / 2;
+    ids.forEach((id, i) => {
+      positions[id] = { x: startX + i * (nodeW + gapX) + nodeW / 2, y: y + nodeH / 2 };
+    });
+  });
+
+  let svg = `<svg class="flowchart-svg" viewBox="0 0 ${svgW} ${svgH}" xmlns="http://www.w3.org/2000/svg">`;
+  svg += `<defs><marker id="arrowhead" markerWidth="8" markerHeight="6" refX="8" refY="3" orient="auto"><polygon points="0 0, 8 3, 0 6" fill="#888"/></marker></defs>`;
+
+  // Draw edges
+  edges.forEach(e => {
+    const from = positions[e.from], to = positions[e.to];
+    if (!from || !to) return;
+    svg += `<line x1="${from.x}" y1="${from.y + nodeH/2}" x2="${to.x}" y2="${to.y - nodeH/2}" stroke="#888" stroke-width="1.5" marker-end="url(#arrowhead)"/>`;
+    if (e.label) {
+      const mx = (from.x + to.x) / 2, my = (from.y + nodeH/2 + to.y - nodeH/2) / 2;
+      svg += `<text x="${mx + 8}" y="${my}" font-size="11" fill="#666" font-family="${CSS.escape('sans-serif')}">${esc(e.label)}</text>`;
+    }
+  });
+
+  // Draw nodes
+  nodes.forEach(n => {
+    const pos = positions[n.id];
+    if (!pos) return;
+    const x = pos.x, y = pos.y;
+    if (n.type === 'decision') {
+      const pts = `${x},${y-nodeH/2} ${x+nodeW/2},${y} ${x},${y+nodeH/2} ${x-nodeW/2},${y}`;
+      svg += `<polygon points="${pts}" fill="var(--accent-light)" stroke="var(--accent)" stroke-width="1.5"/>`;
+    } else if (n.type === 'start' || n.type === 'end') {
+      svg += `<rect x="${x-nodeW/2}" y="${y-nodeH/2}" width="${nodeW}" height="${nodeH}" rx="${nodeH/2}" fill="${n.type === 'start' ? '#e8f5e9' : '#ffebee'}" stroke="${n.type === 'start' ? '#22a558' : '#dc3545'}" stroke-width="1.5"/>`;
+    } else {
+      svg += `<rect x="${x-nodeW/2}" y="${y-nodeH/2}" width="${nodeW}" height="${nodeH}" rx="8" fill="var(--surface)" stroke="var(--border)" stroke-width="1.5"/>`;
+    }
+    // Truncate label to fit
+    const label = n.label.length > 20 ? n.label.slice(0, 18) + '...' : n.label;
+    svg += `<text x="${x}" y="${y + 4}" text-anchor="middle" font-size="12" font-family="sans-serif" fill="var(--text)">${esc(label)}</text>`;
+  });
+
+  svg += '</svg>';
+  el.insertAdjacentHTML('beforeend', svg);
+}
+
+// ─── RENDERER 5: SEMANTIC ZOOM ──────────────────────────────────
+// 3 tabs: TL;DR / Summary / Deep Dive. Content transitions.
+function renderSemanticZoom(el, data) {
+  const levels = [
+    { key: 'tldr', label: 'TL;DR' },
+    { key: 'summary', label: 'Summary' },
+    { key: 'deep_dive', label: 'Deep Dive' },
+  ];
+  let active = 'tldr';
+
+  function render() {
+    el.innerHTML = `<div class="artifact-title">${esc(data.title)}</div><div class="zoom-tabs" id="zoomTabs"></div><div class="zoom-content" id="zoomContent"></div>`;
+    const tabs = el.querySelector('#zoomTabs');
+    levels.forEach(l => {
+      const btn = document.createElement('button');
+      btn.className = `zoom-tab ${active === l.key ? 'active' : ''}`;
+      btn.textContent = l.label;
+      btn.onclick = () => { active = l.key; render(); };
+      tabs.appendChild(btn);
+    });
+    el.querySelector('#zoomContent').textContent = data[active];
+  }
+
+  render();
+}
+
+// ─── RENDERER 6: INLINE QUIZ ────────────────────────────────────
+// One question at a time. Radio options. Check → green/red feedback.
+function renderInlineQuiz(el, data) {
+  let qIndex = 0;
+  let selected = -1;
+  let answered = false;
+  let score = 0;
+  let finished = false;
+
+  function render() {
+    if (finished) {
+      el.innerHTML = `
+        <div class="artifact-title">${esc(data.title)}</div>
+        <div class="quiz-score">
+          <div class="score-number">${score} / ${data.questions.length}</div>
+          <div class="score-label">Questions correct</div>
+        </div>`;
+      return;
+    }
+
+    const q = data.questions[qIndex];
+    el.innerHTML = `
+      <div class="artifact-title">${esc(data.title)}</div>
+      <div class="quiz-counter">Question ${qIndex + 1} of ${data.questions.length}</div>
+      <div class="quiz-question-text">${esc(q.question)}</div>
+      <div class="quiz-options" id="quizOptions"></div>
+      <div id="quizExplanation"></div>
+      <div class="quiz-actions" id="quizActions"></div>`;
+
+    const optContainer = el.querySelector('#quizOptions');
+    q.options.forEach((opt, i) => {
+      const div = document.createElement('div');
+      div.className = 'quiz-option';
+      if (answered) {
+        div.classList.add('disabled');
+        if (i === q.correct_index) div.classList.add('correct');
+        else if (i === selected) div.classList.add('incorrect');
+      } else if (i === selected) {
+        div.classList.add('selected');
+      }
+      div.textContent = opt;
+      if (!answered) {
+        div.onclick = () => { selected = i; render(); };
+      }
+      optContainer.appendChild(div);
+    });
+
+    const actions = el.querySelector('#quizActions');
+    if (!answered && selected >= 0) {
+      const checkBtn = document.createElement('button');
+      checkBtn.className = 'quiz-btn quiz-btn-check';
+      checkBtn.textContent = 'Check Answer';
+      checkBtn.onclick = () => {
+        answered = true;
+        if (selected === q.correct_index) score++;
+        render();
+      };
+      actions.appendChild(checkBtn);
+    }
+    if (answered) {
+      el.querySelector('#quizExplanation').innerHTML =
+        `<div class="quiz-explanation">${esc(q.explanation)}</div>`;
+      const nextBtn = document.createElement('button');
+      nextBtn.className = 'quiz-btn quiz-btn-next';
+      nextBtn.textContent = qIndex < data.questions.length - 1 ? 'Next Question' : 'See Score';
+      nextBtn.onclick = () => {
+        if (qIndex < data.questions.length - 1) {
+          qIndex++; selected = -1; answered = false; render();
+        } else {
+          finished = true; render();
+        }
+      };
+      actions.appendChild(nextBtn);
+    }
+  }
+
+  render();
+}
+
+// ─── RENDERER 7: CONCEPT EXPLORER ───────────────────────────────
+// SVG scatter plot. Click a dot → sends "Tell me more about: X" to chat.
+function renderConceptExplorer(el, data) {
+  el.innerHTML = `<div class="artifact-title">${esc(data.title)}</div>`;
+
+  const pad = 50, w = 500, h = 380;
+  const plotW = w - 2 * pad, plotH = h - 2 * pad;
+
+  let svg = `<svg class="explorer-svg" viewBox="0 0 ${w} ${h}" xmlns="http://www.w3.org/2000/svg">`;
+
+  // Axes
+  svg += `<line x1="${pad}" y1="${h - pad}" x2="${w - pad}" y2="${h - pad}" stroke="#ccc" stroke-width="1"/>`;
+  svg += `<line x1="${pad}" y1="${pad}" x2="${pad}" y2="${h - pad}" stroke="#ccc" stroke-width="1"/>`;
+
+  // Axis labels
+  svg += `<text x="${w / 2}" y="${h - 8}" text-anchor="middle" font-size="12" fill="#666" font-family="sans-serif">${esc(data.x_axis)}</text>`;
+  svg += `<text x="14" y="${h / 2}" text-anchor="middle" font-size="12" fill="#666" font-family="sans-serif" transform="rotate(-90, 14, ${h / 2})">${esc(data.y_axis)}</text>`;
+
+  // Dots
+  const colors = ['#5b5fc7', '#22a558', '#dc3545', '#f59e0b', '#8b5cf6', '#06b6d4', '#ec4899', '#84cc16', '#f97316', '#6366f1'];
+  data.concepts.forEach((c, i) => {
+    const cx = pad + (c.x / 100) * plotW;
+    const cy = h - pad - (c.y / 100) * plotH;
+    const color = colors[i % colors.length];
+    svg += `<circle class="explorer-dot" cx="${cx}" cy="${cy}" r="7" fill="${color}" data-idx="${i}"
+      onmouseenter="showTooltip(event, '${esc(c.description).replace(/'/g, "\\'")}')"
+      onmouseleave="hideTooltip()"
+      onclick="sendMessage('Tell me more about: ${esc(c.name).replace(/'/g, "\\'")}')" />`;
+    svg += `<text class="explorer-label" x="${cx}" y="${cy - 14}" text-anchor="middle">${esc(c.name)}</text>`;
+  });
+
+  svg += '</svg>';
+  el.insertAdjacentHTML('beforeend', svg);
+}
+
+// Tooltip helpers for concept explorer
+function showTooltip(event, text) {
+  const tt = document.getElementById('explorerTooltip');
+  tt.textContent = text;
+  tt.style.display = 'block';
+  tt.style.left = event.pageX + 12 + 'px';
+  tt.style.top = event.pageY - 10 + 'px';
+}
+function hideTooltip() {
+  document.getElementById('explorerTooltip').style.display = 'none';
+}
+
+// ─── UTILITIES ───────────────────────────────────────────────────
+function esc(str) {
+  if (!str) return '';
+  const div = document.createElement('div');
+  div.textContent = str;
+  return div.innerHTML;
+}
+</script>
+</body>
+</html>
